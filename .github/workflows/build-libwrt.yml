@@ -34,6 +34,23 @@ jobs:
       - name: Clone LibWrt source
         run: git clone --depth 1 https://github.com/LiBwrt/LibWrt openwrt-src
 
+      - name: Seed dl cache
+        working-directory: openwrt-src
+        run: |
+          mkdir -p dl
+          cp "$GITHUB_WORKSPACE"/dl/*.tar.gz dl/ 2>/dev/null || true
+          ls -lh dl/
+
+      - name: Add extra feeds
+        working-directory: openwrt-src
+        run: |
+          cat >> feeds.conf.default <<'EOF'
+          src-git passwall_packages https://github.com/OpenWrt-Passwall/openwrt-passwall-packages.git;main
+          src-git passwall_luci https://github.com/OpenWrt-Passwall/openwrt-passwall.git;main
+          src-git sirpdboy https://github.com/sirpdboy/sirpdboy-package.git;main
+          EOF
+          cat feeds.conf.default
+
       - name: Update and install feeds
         working-directory: openwrt-src
         run: |
@@ -73,4 +90,4 @@ jobs:
           tag="libwrt-nn6000v2-$(date +%Y%m%d)-run${{ github.run_number }}"
           gh release create "$tag" firmware/* \
             --title "LibWrt NN6000V2 $tag" \
-            --notes "LibWrt (LiBwrt/LibWrt) for Link NN6000 V2. factory.bin = U-Boot first flash, sysupgrade.bin = upgrade from OpenWrt/ImmortalWrt. Kernel 6MB."
+            --notes "LibWrt (LiBwrt/LibWrt) for Link NN6000 V2, with Lucky and PassWall. factory.bin = U-Boot first flash, sysupgrade.bin = upgrade from OpenWrt/ImmortalWrt. Kernel 6MB."
