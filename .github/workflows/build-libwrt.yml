@@ -47,9 +47,16 @@ jobs:
           cat >> feeds.conf.default <<'EOF'
           src-git passwall_packages https://github.com/OpenWrt-Passwall/openwrt-passwall-packages.git;main
           src-git passwall_luci https://github.com/OpenWrt-Passwall/openwrt-passwall.git;main
-          src-git sirpdboy https://github.com/sirpdboy/sirpdboy-package.git;main
           EOF
           cat feeds.conf.default
+
+      - name: Add Lucky packages
+        working-directory: openwrt-src
+        run: |
+          git clone --depth 1 https://github.com/kenzok8/small-package.git /tmp/small-package
+          cp -r /tmp/small-package/lucky package/
+          cp -r /tmp/small-package/luci-app-lucky package/
+          ls package/lucky package/luci-app-lucky
 
       - name: Update and install feeds
         working-directory: openwrt-src
