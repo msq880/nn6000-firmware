@@ -58,6 +58,21 @@ jobs:
           cp -r /tmp/small-package/luci-app-lucky package/
           ls package/lucky package/luci-app-lucky
 
+      - name: Add Argon config package
+        working-directory: openwrt-src
+        run: |
+          git clone --depth 1 https://github.com/jerrykuku/luci-app-argon-config.git package/luci-app-argon-config
+          ls package/luci-app-argon-config
+
+      - name: Add MosDNS packages
+        working-directory: openwrt-src
+        run: |
+          git clone --depth 1 -b v5 https://github.com/sbwml/luci-app-mosdns.git /tmp/mosdns-repo
+          cp -r /tmp/mosdns-repo/mosdns package/
+          cp -r /tmp/mosdns-repo/luci-app-mosdns package/
+          cp -r /tmp/mosdns-repo/geo2txt package/
+          ls package/mosdns package/luci-app-mosdns package/geo2txt
+
       - name: Update and install feeds
         working-directory: openwrt-src
         run: |
@@ -97,4 +112,4 @@ jobs:
           tag="libwrt-nn6000v2-$(date +%Y%m%d)-run${{ github.run_number }}"
           gh release create "$tag" firmware/* \
             --title "LibWrt NN6000V2 $tag" \
-            --notes "LibWrt (LiBwrt/LibWrt) for Link NN6000 V2, with Lucky and PassWall. factory.bin = U-Boot first flash, sysupgrade.bin = upgrade from OpenWrt/ImmortalWrt. Kernel 6MB."
+            --notes "LibWrt (LiBwrt/LibWrt) for Link NN6000 V2, full package set: Lucky, PassWall, Argon theme, Docker, MosDNS, ttyd, WireGuard, KMS and more. Rootfs 2GB, kernel 6MB. factory.bin = U-Boot first flash, sysupgrade.bin = upgrade from OpenWrt/ImmortalWrt."
