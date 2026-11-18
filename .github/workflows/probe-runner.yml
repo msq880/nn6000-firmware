@@ -1,0 +1,17 @@
+name: Probe Runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - name: Probe environment
+        run: |
+          echo "== OS =="; head -3 /etc/os-release
+          echo "== user/home/pwd =="; whoami; echo "$HOME"; pwd
+          echo "== CPU/RAM =="; nproc; free -h | head -2
+          echo "== disk =="; df -h "$HOME" /tmp | tail -3
+          echo "== tools =="; command -v apt-get pacman docker git gcc make python3 || true
+          echo "== hostname =="; hostname
