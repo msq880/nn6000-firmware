@@ -1,0 +1,20 @@
+name: Probe Container
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ubuntu:22.04
+    steps:
+      - name: Probe container environment
+        run: |
+          echo "== container OS =="; head -2 /etc/os-release
+          echo "== workspace =="; echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"; pwd
+          mkdir -p "$GITHUB_WORKSPACE/.persist-probe"
+          echo "run ${{ github.run_id }}" >> "$GITHUB_WORKSPACE/.persist-probe/marker.txt"
+          echo "-- workspace marker history --"; cat "$GITHUB_WORKSPACE/.persist-probe/marker.txt"
+          echo "== disk =="; df -h "$GITHUB_WORKSPACE" | tail -2
+          echo "== tools in container =="; command -v git gcc make python3 || true
