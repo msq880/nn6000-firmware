@@ -1,0 +1,148 @@
+name: Build LibWrt NN6000V2 (Local)
+
+# Self-hosted version: runs on the local runner (omarchy-msq880) inside an
+# Ubuntu 24.04 Docker container. The OpenWrt source tree lives in the job
+# workspace on the host disk and is kept between runs, so dl/, .ccache and
+# build_dir persist and later builds are incremental.
+# Manual dispatch only, so it never fires together with the cloud workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      clean:
+        description: 'Clean rebuild (make dirclean first, dl cache is kept)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 720
+    container:
+      image: ubuntu:24.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq build-essential clang flex bison g++ gawk \
+            gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
+            python3-setuptools rsync swig unzip zlib1g-dev \
+            file wget libelf-dev zstd curl jq ca-certificates
+
+      - name: Fetch build repo (config)
+        run: |
+          if [ -d cfg-repo/.git ]; then
+            git -C cfg-repo fetch --depth 1 origin main
+            git -C cfg-repo reset --hard FETCH_HEAD
+          else
+            git clone --depth 1 https://github.com/${{ github.repository }} cfg-repo
+          fi
+          ls cfg-repo/configs/
+
+      - name: Clone or update LibWrt source
+        run: |
+          if [ -d openwrt-src/.git ]; then
+            cd openwrt-src
+            git fetch --depth 1 origin
+            git reset --hard FETCH_HEAD
+          else
+            git clone --depth 1 https://github.com/LiBwrt/LibWrt openwrt-src
+          fi
+
+      - name: Seed dl cache
+        working-directory: openwrt-src
+        run: |
+          mkdir -p dl
+          cp "$GITHUB_WORKSPACE"/cfg-repo/dl/*.tar.gz dl/ 2>/dev/null || true
+          ls -lh dl/ | head
+
+      - name: Add extra feeds
+        working-directory: openwrt-src
+        run: |
+          grep -q passwall_packages feeds.conf.default || cat >> feeds.conf.default <<'EOF'
+          src-git passwall_packages https://github.com/OpenWrt-Passwall/openwrt-passwall-packages.git;main
+          src-git passwall_luci https://github.com/OpenWrt-Passwall/openwrt-passwall.git;main
+          EOF
+          cat feeds.conf.default
+
+      - name: Add Lucky packages
+        working-directory: openwrt-src
+        run: |
+          git clone --depth 1 https://github.com/kenzok8/small-package.git /tmp/small-package
+          rm -rf package/lucky package/luci-app-lucky
+          cp -r /tmp/small-package/lucky package/
+          cp -r /tmp/small-package/luci-app-lucky package/
+          ls package/lucky package/luci-app-lucky
+
+      - name: Add Argon config package
+        working-directory: openwrt-src
+        run: |
+          rm -rf package/luci-app-argon-config
+          git clone --depth 1 https://github.com/jerrykuku/luci-app-argon-config.git package/luci-app-argon-config
+          ls package/luci-app-argon-config
+
+      - name: Add MosDNS packages
+        working-directory: openwrt-src
+        run: |
+          git clone --depth 1 -b v5 https://github.com/sbwml/luci-app-mosdns.git /tmp/mosdns-repo
+          rm -rf package/mosdns package/luci-app-mosdns package/geo2txt
+          cp -r /tmp/mosdns-repo/mosdns package/
+          cp -r /tmp/mosdns-repo/luci-app-mosdns package/
+          cp -r /tmp/mosdns-repo/geo2txt package/
+          ls package/mosdns package/luci-app-mosdns package/geo2txt
+
+      - name: Update and install feeds
+        working-directory: openwrt-src
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Load config
+        working-directory: openwrt-src
+        env:
+          FORCE_UNSAFE_CONFIGURE: 1
+        run: |
+          if [ "${{ inputs.clean }}" = "true" ]; then make dirclean || true; fi
+          cp "$GITHUB_WORKSPACE/cfg-repo/configs/libwrt.config" .config
+          grep -q '^CONFIG_CCACHE' .config || echo 'CONFIG_CCACHE=y' >> .config
+          make defconfig
+
+      - name: Download sources
+        working-directory: openwrt-src
+        run: make download -j8
+
+      - name: Compile firmware
+        working-directory: openwrt-src
+        env:
+          FORCE_UNSAFE_CONFIGURE: 1
+        run: make -j8 || make -j1 V=s
+
+      - name: Collect firmware files
+        run: |
+          rm -rf firmware
+          mkdir -p firmware
+          find openwrt-src/bin/targets/qualcommax/ipq60xx -maxdepth 1 -type f -name '*nn6000-v2*' -exec cp -v {} firmware/ \;
+          ls -lh firmware/
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="libwrt-nn6000v2-$(date +%Y%m%d)-local${{ github.run_number }}"
+          body="LibWrt (LiBwrt/LibWrt) for Link NN6000 V2, LOCAL self-hosted build. Full package set: Lucky, PassWall, Argon theme, Docker, MosDNS, ttyd, WireGuard, KMS and more. Rootfs 2GB, kernel 6MB. factory.bin = U-Boot first flash, sysupgrade.bin = upgrade from OpenWrt/ImmortalWrt."
+          resp=$(curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/releases \
+            -d "{\"tag_name\":\"$tag\",\"name\":\"LibWrt NN6000V2 $tag\",\"body\":\"$body\"}")
+          upload_url=$(echo "$resp" | jq -r '.upload_url' | sed 's/{.*//')
+          if [ -z "$upload_url" ] || [ "$upload_url" = "null" ]; then echo "$resp"; exit 1; fi
+          for f in firmware/*; do
+            curl -s -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/octet-stream" \
+              --data-binary @"$f" "$upload_url?name=$(basename "$f")" | jq -r '.name // .message'
+          done
+          echo "Release $tag published"
