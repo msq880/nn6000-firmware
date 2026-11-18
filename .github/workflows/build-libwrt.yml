@@ -2,10 +2,6 @@ name: Build LibWrt NN6000V2
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'configs/libwrt.config'
-      - '.github/workflows/build-libwrt.yml'
 
 permissions:
   contents: write
