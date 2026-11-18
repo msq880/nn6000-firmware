@@ -121,7 +121,7 @@ jobs:
         working-directory: openwrt-src
         env:
           FORCE_UNSAFE_CONFIGURE: 1
-        run: make -j8 || make -j1 V=s
+        run: make -j1 V=s
 
       - name: Collect firmware files
         run: |
