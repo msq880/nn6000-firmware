@@ -5,7 +5,9 @@
 #     configs/libwrt.config 的内容哈希走，并带 restore-keys 前缀回退（改配置先拉旧缓存打底）；
 #     （2026-11-19 首轮验证发现：LibWrt 默认 CCACHE_DIR=$(TOPDIR)/.ccache，编译缓存实际写在
 #      源码目录内，原先写的 ~/.ccache 始终为空、保存被跳过，已修正为 openwrt-src/.ccache。）
-#  3. Load config 时追加 CONFIG_CCACHE=y（不开这一行，光存 ccache 目录没用）；
+#  3. Load config 时追加 CONFIG_DEVEL=y 与 CONFIG_CCACHE=y（2026-11-19 本地实测确认：
+#     CONFIG_CCACHE 在 Config-devel.in 里挂在 DEVEL 之下、单独追加会被 make defconfig
+#     直接丢弃，前两轮 ccache 从未启用、目录根本没生成；必须先开 DEVEL 才能保留 CCACHE）；
 #  4. Release 标签带 -cache 后缀，与无缓存版的 -run<N> 区分、避免撞名。
 # 缓存存于 GitHub 的 Actions 缓存服务（每仓库 10GB），缓存缺失/被淘汰时自动退化为全量编译，不影响构建本身。
 name: Build LibWrt NN6000V2 (Cache)
@@ -105,6 +107,7 @@ jobs:
         working-directory: openwrt-src
         run: |
           cp "$GITHUB_WORKSPACE/configs/libwrt.config" .config
+          grep -q '^CONFIG_DEVEL' .config || echo 'CONFIG_DEVEL=y' >> .config
           grep -q '^CONFIG_CCACHE' .config || echo 'CONFIG_CCACHE=y' >> .config
           make defconfig
 
