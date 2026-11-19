@@ -2,6 +2,15 @@ name: Build LibWrt NN6000V2
 
 on:
   workflow_dispatch:
+    inputs:
+      config_file:
+        description: '配置文件（libwrt.config = 标准版；libwrt-nowifi.config = 无 WiFi 版）'
+        type: choice
+        options:
+          - libwrt.config
+          - libwrt-nowifi.config
+        default: libwrt.config
+        required: true
 
 permissions:
   contents: write
@@ -78,7 +87,7 @@ jobs:
       - name: Load config
         working-directory: openwrt-src
         run: |
-          cp "$GITHUB_WORKSPACE/configs/libwrt.config" .config
+          cp "$GITHUB_WORKSPACE/configs/${{ inputs.config_file }}" .config
           make defconfig
 
       - name: Download sources
@@ -106,6 +115,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="libwrt-nn6000v2-$(date +%Y%m%d)-run${{ github.run_number }}"
+          variant=""
+          if [ "${{ inputs.config_file }}" = "libwrt-nowifi.config" ]; then
+            tag="libwrt-nn6000v2-$(date +%Y%m%d)-nowifi-run${{ github.run_number }}"
+            variant=" No-WiFi variant: all WiFi drivers, firmware and wireless configuration removed (wired only)."
+          fi
           gh release create "$tag" firmware/* \
             --title "LibWrt NN6000V2 $tag" \
-            --notes "LibWrt (LiBwrt/LibWrt) for Link NN6000 V2, full package set: Lucky, PassWall, Argon theme, Docker, MosDNS, ttyd, WireGuard, KMS and more. Rootfs 2GB, kernel 6MB. factory.bin = U-Boot first flash, sysupgrade.bin = upgrade from OpenWrt/ImmortalWrt."
+            --notes "LibWrt (LiBwrt/LibWrt) for Link NN6000 V2, full package set: Lucky, PassWall, Argon theme, MosDNS, ttyd, WireGuard, KMS and more. Rootfs 2GB, kernel 6MB. factory.bin = U-Boot first flash, sysupgrade.bin = upgrade from OpenWrt/ImmortalWrt.$variant"
