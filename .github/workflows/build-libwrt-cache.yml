@@ -1,9 +1,11 @@
 # LibWrt 云端编译（缓存版），2026-11-19 用户要求新建，与无缓存版 build-libwrt.yml 并存，
 # 无缓存版保留不动。相对无缓存版的差异只有四处：
 #  1. apt 加装 ccache；
-#  2. Clone 之后用 actions/cache@v4 恢复 dl/ 与 ~/.ccache 两个缓存，key 跟
+#  2. Clone 之后用 actions/cache@v4 恢复 dl/ 与 openwrt-src/.ccache 两个缓存，key 跟
 #     configs/libwrt.config 的内容哈希走，并带 restore-keys 前缀回退（改配置先拉旧缓存打底）；
-#  3. Load config 时追加 CONFIG_CCACHE=y（不开这一行，光缓存 ~/.ccache 没用）；
+#     （2026-11-19 首轮验证发现：LibWrt 默认 CCACHE_DIR=$(TOPDIR)/.ccache，编译缓存实际写在
+#      源码目录内，原先写的 ~/.ccache 始终为空、保存被跳过，已修正为 openwrt-src/.ccache。）
+#  3. Load config 时追加 CONFIG_CCACHE=y（不开这一行，光存 ccache 目录没用）；
 #  4. Release 标签带 -cache 后缀，与无缓存版的 -run<N> 区分、避免撞名。
 # 缓存存于 GitHub 的 Actions 缓存服务（每仓库 10GB），缓存缺失/被淘汰时自动退化为全量编译，不影响构建本身。
 name: Build LibWrt NN6000V2 (Cache)
@@ -49,7 +51,7 @@ jobs:
       - name: Restore ccache
         uses: actions/cache@v4
         with:
-          path: ~/.ccache
+          path: openwrt-src/.ccache
           key: libwrt-ccache-${{ hashFiles('configs/libwrt.config') }}
           restore-keys: |
             libwrt-ccache-
