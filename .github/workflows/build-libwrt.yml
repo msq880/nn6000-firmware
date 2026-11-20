@@ -1,16 +1,15 @@
+# LibWrt 云端编译（无缓存版，双版本合一），2026-11-20 用户要求合并：
+# 一次运行里在同一棵源码树上连编两个版本——先标准版（configs/libwrt.config，带 WiFi），
+# 再无 WiFi 版（configs/libwrt-nowifi.config）。第二次编译复用第一次的全部成果：
+# dl/ 源码包不重下、工具链与 host 工具不重编、未受配置影响的软件包不重编，
+# 只重编内核/模块与受影响部分，所以总耗时明显小于分开跑两次。
+# 换配置前必须清掉 rootfs 暂存区（staging_dir/target-*/root-* 与 build_dir/target-*/root-*），
+# 否则标准版装进根文件系统的 WiFi 文件会残留进无 WiFi 版镜像；bin/ 也整目录清掉防清单串版。
+# 两个版本的成品文件名靠 -wifi / -nowifi 后缀区分，同一个 Release 一起发布。
 name: Build LibWrt NN6000V2
 
 on:
   workflow_dispatch:
-    inputs:
-      config_file:
-        description: '配置文件（libwrt.config = 标准版；libwrt-nowifi.config = 无 WiFi 版）'
-        type: choice
-        options:
-          - libwrt.config
-          - libwrt-nowifi.config
-        default: libwrt.config
-        required: true
 
 permissions:
   contents: write
@@ -84,42 +83,60 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Load config
+      - name: Load config (WiFi standard)
         working-directory: openwrt-src
         run: |
-          cp "$GITHUB_WORKSPACE/configs/${{ inputs.config_file }}" .config
+          cp "$GITHUB_WORKSPACE/configs/libwrt.config" .config
           make defconfig
 
       - name: Download sources
         working-directory: openwrt-src
         run: make download -j8
 
-      - name: Compile firmware
+      - name: Compile firmware (WiFi standard)
         working-directory: openwrt-src
         run: make -j$(nproc) || make -j1 V=s
 
-      - name: Collect firmware files
+      - name: Collect firmware files (WiFi standard)
         run: |
-          mkdir -p firmware
-          find openwrt-src/bin/targets/qualcommax/ipq60xx -maxdepth 1 -type f -name '*nn6000-v2*' -exec cp -v {} firmware/ \;
-          ls -lh firmware/
+          mkdir -p firmware/wifi
+          for f in openwrt-src/bin/targets/qualcommax/ipq60xx/*nn6000-v2*; do
+            new=$(basename "$f" | sed 's/link_nn6000-v2/link_nn6000-v2-wifi/')
+            cp -v "$f" "firmware/wifi/$new"
+          done
+          ls -lh firmware/wifi/
+
+      - name: Switch to no-WiFi config
+        working-directory: openwrt-src
+        run: |
+          rm -rf staging_dir/target-*/root-* build_dir/target-*/root-* bin
+          cp "$GITHUB_WORKSPACE/configs/libwrt-nowifi.config" .config
+          make defconfig
+
+      - name: Compile firmware (no-WiFi)
+        working-directory: openwrt-src
+        run: make -j$(nproc) || make -j1 V=s
+
+      - name: Collect firmware files (no-WiFi)
+        run: |
+          mkdir -p firmware/nowifi
+          for f in openwrt-src/bin/targets/qualcommax/ipq60xx/*nn6000-v2*; do
+            new=$(basename "$f" | sed 's/link_nn6000-v2/link_nn6000-v2-nowifi/')
+            cp -v "$f" "firmware/nowifi/$new"
+          done
+          ls -lh firmware/nowifi/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: LibWrt-NN6000V2
-          path: firmware/*
+          path: firmware/
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="libwrt-nn6000v2-$(date +%Y%m%d)-run${{ github.run_number }}"
-          variant=""
-          if [ "${{ inputs.config_file }}" = "libwrt-nowifi.config" ]; then
-            tag="libwrt-nn6000v2-$(date +%Y%m%d)-nowifi-run${{ github.run_number }}"
-            variant=" No-WiFi variant: all WiFi drivers, firmware and wireless configuration removed (wired only)."
-          fi
-          gh release create "$tag" firmware/* \
+          gh release create "$tag" firmware/wifi/* firmware/nowifi/* \
             --title "LibWrt NN6000V2 $tag" \
-            --notes "LibWrt (LiBwrt/LibWrt) for Link NN6000 V2, full package set: Lucky, PassWall, Argon theme, MosDNS, ttyd, WireGuard, KMS and more. Rootfs 2GB, kernel 6MB. factory.bin = U-Boot first flash, sysupgrade.bin = upgrade from OpenWrt/ImmortalWrt.$variant"
+            --notes "LibWrt (LiBwrt/LibWrt) for Link NN6000 V2, two variants in one release. Files with -wifi- = standard build (413 packages, WiFi included); files with -nowifi- = no-WiFi build (379 packages, all WiFi drivers, firmware and wireless configuration removed, wired only). Full package set: Lucky, PassWall, Argon theme, MosDNS, ttyd, WireGuard, KMS and more. Rootfs 2GB, kernel 6MB. factory.bin = U-Boot first flash, sysupgrade.bin = upgrade from OpenWrt/ImmortalWrt."
