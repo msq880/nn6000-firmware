@@ -45,6 +45,15 @@ jobs:
           cp "$GITHUB_WORKSPACE"/dl/*.tar.gz dl/ 2>/dev/null || true
           ls -lh dl/
 
+      # frpdash overlay: LuCI「服务 → FRP 控制台」跳转菜单（点一下跳到 frps 控制台
+      # http://192.168.1.1:7500，地址存 /etc/config/frpdash 可改）。用 files/ 覆盖层
+      # 注入根文件系统，两个版本共用同一棵源码树、都会带上。
+      - name: Add frpdash LuCI menu overlay
+        run: |
+          mkdir -p openwrt-src/files
+          cp -a "$GITHUB_WORKSPACE"/frpdash/root/. openwrt-src/files/
+          find openwrt-src/files -type f | sort
+
       - name: Add extra feeds
         working-directory: openwrt-src
         run: |

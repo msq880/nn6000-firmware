@@ -1,0 +1,13 @@
+{
+	"admin/services/frpdash": {
+		"title": "FRP 控制台",
+		"order": 60,
+		"action": {
+			"type": "view",
+			"path": "frpdash"
+		},
+		"depends": {
+			"acl": [ "luci-app-frpdash" ]
+		}
+	}
+}
