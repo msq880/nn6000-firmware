@@ -6,12 +6,14 @@
 |---|---|---|---|
 | LibWrt | LiBwrt/LibWrt | `Build LibWrt NN6000V2`（`.github/workflows/build-libwrt.yml`） | 见下 |
 
-触发方式：**仅手动触发**。在 Actions 页选 `Build LibWrt NN6000V2` → Run workflow，`config_file` 选配置：
+触发方式：**仅手动触发**。在 Actions 页选 `Build LibWrt NN6000V2` → Run workflow，一次运行在同一棵源码树上**连编两个版本**：
 
-- `libwrt.config`（默认）：标准版，413 个包，带 WiFi
-- `libwrt-nowifi.config`：无 WiFi 版，379 个包，关掉 ath11k 全家等 WiFi 驱动与配置（仅剩 LuCI 依赖的 iwinfo 查询库）
+- 先编标准版（`configs/libwrt.config`）：413 个包，带 WiFi
+- 再编无 WiFi 版（`configs/libwrt-nowifi.config`）：379 个包，关掉 ath11k 全家等 WiFi 驱动与配置（仅剩 LuCI 依赖的 iwinfo 查询库）
 
-成品下载：编译完成后在本仓库 **Releases** 里下载，标签形如 `libwrt-nn6000v2-<日期>-run<序号>`（无 WiFi 版带 `-nowifi-`），Actions 的 Artifacts 里也有一份。每次编译约 90 分钟，全量下载 + 全量编译，没有缓存加速。
+第二个版本复用第一个的源码树：`dl/` 源码包不重下、工具链和 host 工具不重编、不受配置影响的软件包不重编，只重编内核/模块等受影响部分，所以两个版本的总耗时明显小于分开跑两次（仓库不使用 GitHub Actions 缓存，跨运行不留缓存；换配置前工作流会清掉 rootfs 暂存区，防止标准版的 WiFi 文件残留进无 WiFi 版镜像）。
+
+成品下载：编译完成后在本仓库 **Releases** 里下载，一次运行只发一个 Release，标签形如 `libwrt-nn6000v2-<日期>-run<序号>`，两个版本的固件都在里面，靠文件名区分：带 `-wifi-` 的是标准版，带 `-nowifi-` 的是无 WiFi 版；Actions 的 Artifacts 里也有一份。
 
 固件口径：
 
