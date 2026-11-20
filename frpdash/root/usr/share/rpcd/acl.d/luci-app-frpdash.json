@@ -1,8 +1,0 @@
-{
-	"luci-app-frpdash": {
-		"description": "Grant access to frpdash configuration",
-		"read": {
-			"uci": [ "frpdash" ]
-		}
-	}
-}
